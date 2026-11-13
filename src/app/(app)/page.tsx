@@ -52,7 +52,12 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
     <div className="space-y-14">
       <div>
         <PageHeader path="hoje" />
-        <p className="mt-3 text-[15px] text-dust first-letter:uppercase">{dateLabel}</p>
+        <p className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 text-[15px] text-dust">
+          <span className="first-letter:uppercase">{dateLabel}</span>
+          <Link href="/relatorio" className="text-[13px] text-faint hover:text-dust">
+            relatório do mês
+          </Link>
+        </p>
       </div>
 
       <section aria-labelledby="checkin">

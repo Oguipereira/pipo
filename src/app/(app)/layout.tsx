@@ -13,6 +13,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={<NavFallback />}>
           <Nav />
         </Suspense>
+        <Link href="/relatorio" className="font-mono text-[13px] text-faint hover:text-chalk">
+          relatório
+        </Link>
         <div className="mt-auto">
           <Suspense fallback={<UserMenuFallback />}>
             <UserMenu />
