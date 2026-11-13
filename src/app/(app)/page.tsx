@@ -9,9 +9,8 @@ import { getEvents } from "@/lib/data/agenda";
 import { occurrences, upcomingDeadlines, countdown, type Occurrence } from "@/lib/agenda";
 import { OccurrenceItem } from "@/components/occurrence";
 import { dueLabel, nextTask } from "@/lib/projects";
-import { dayCompletion } from "@/lib/habits";
+import { dayCompletion, isActiveOn, scheduleLabel } from "@/lib/habits";
 import { buildGrid, levelFromCount, levelFromRatio, type Level } from "@/lib/heatmap";
-import { sampleContributions, sampleHabitRatios } from "@/lib/sample";
 import { computeStreaks } from "@/lib/streak";
 import { CheckIn } from "@/components/check-in";
 import { Heatmap, HeatLegend } from "@/components/heatmap";
@@ -84,9 +83,13 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
                 <InlineLink href="/habitos/novo">Criar o primeiro</InlineLink>
               </>
             ) : (
-              "Nenhum hábito agendado para este dia."
+              `Nenhum hábito agendado para ${day === today ? "hoje" : "ontem"}.`
             )
           }
+        />
+        <OffSchedule
+          habits={board.habits.filter((h) => h.startDate <= day && !h.archivedAt && !isActiveOn(h, day))}
+          day={day === today ? "hoje" : "ontem"}
         />
       </section>
 
@@ -103,6 +106,26 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
         <TodayAgenda items={todayEvents} next={nextDeadline} today={today} />
         <NextSteps projects={projects.filter((p) => p.status === "active")} today={today} />
       </div>
+    </div>
+  );
+}
+
+/** Hábitos que existem mas não valem no dia: deixa claro por que não estão no check-in. */
+function OffSchedule({ habits, day }: { habits: HabitBoard["habits"]; day: string }) {
+  if (habits.length === 0) return null;
+  return (
+    <div className="mt-3 text-[13px] text-faint">
+      <p>Fora da agenda {day}:</p>
+      <ul className="mt-1 space-y-0.5">
+        {habits.map((h) => (
+          <li key={h.id}>
+            <Link href={`/habitos/${h.id}`} className="text-dust hover:text-chalk">
+              {h.name}
+            </Link>{" "}
+            <span>só {scheduleLabel(h.scheduleDays)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -181,15 +204,16 @@ function CodeActivity({
   yearStart: Day;
   days: { date: Day; count: number; level: number }[];
 }) {
-  const real = days.some((d) => d.count > 0);
-  const counts = real ? new Map(days.map((d) => [d.date, d.count])) : sampleContributions(today);
-  const levels = real ? new Map(days.map((d) => [d.date, d.level as Level])) : null;
+  // Só dados reais: sem sincronização, o ano aparece vazio (nada de números de exemplo).
+  const synced = days.length > 0;
+  const counts = new Map(days.map((d) => [d.date, d.count]));
+  const levels = new Map(days.map((d) => [d.date, d.level as Level]));
   const max = Math.max(1, ...counts.values());
 
   const grid = buildGrid(today, (day) => {
     const n = counts.get(day) ?? 0;
     return {
-      level: levels?.get(day) ?? levelFromCount(n, max),
+      level: levels.get(day) ?? levelFromCount(n, max),
       label: `${n} contribuiç${n === 1 ? "ão" : "ões"} em ${fmt(day)}`,
     };
   });
@@ -199,16 +223,20 @@ function CodeActivity({
   return (
     <ActivityBlock
       value={total.toLocaleString("pt-BR")}
-      caption={real ? "contribuições no GitHub no último ano" : "commits no último ano"}
+      caption="contribuições no GitHub no último ano"
       facts={[
         ["sequência atual", plural(streak.current, "dia")],
         ["recorde", plural(streak.best, "dia")],
       ]}
       heatmap={<Heatmap grid={grid} label="Contribuições por dia no último ano" highlight={today} sweep />}
       note={
-        real
-          ? "Como o GitHub conta: commits, PRs, issues e reviews."
-          : "Exemplo. Suas contribuições aparecem aqui depois da primeira sincronização com o GitHub."
+        synced ? (
+          "Como o GitHub conta: commits, PRs, issues e reviews."
+        ) : (
+          <>
+            Nada sincronizado ainda. <InlineLink href="/codigo">Conectar o GitHub</InlineLink>
+          </>
+        )
       }
     />
   );
@@ -217,10 +245,7 @@ function CodeActivity({
 function HabitActivity({ board, yearStart }: { board: HabitBoard; yearStart: Day }) {
   const { today, habits, ratio } = board;
   const real = habits.length > 0;
-  const sample = real ? null : sampleHabitRatios(today);
-
-  const completion = (day: Day): number | null =>
-    sample ? (sample.get(day) ?? 0) : dayCompletion(habits, ratio, day);
+  const completion = (day: Day): number | null => dayCompletion(habits, ratio, day);
 
   const grid = buildGrid(today, (day) => {
     const c = completion(day);
@@ -256,7 +281,15 @@ function HabitActivity({ board, yearStart }: { board: HabitBoard; yearStart: Day
         ["recorde", String(perfect.best)],
       ]}
       heatmap={<Heatmap grid={grid} label="Hábitos cumpridos por dia no último ano" highlight={today} />}
-      note={real ? "Média dos hábitos agendados em cada dia." : "Exemplo. Seus hábitos aparecem aqui quando você criar o primeiro."}
+      note={
+        real ? (
+          "Média dos hábitos agendados em cada dia; listrado = nenhum hábito agendado."
+        ) : (
+          <>
+            O ano preenche conforme você marca. <InlineLink href="/habitos/novo">Criar um hábito</InlineLink>
+          </>
+        )
+      }
       legend={<HeatLegend less="0%" more="100%" />}
     />
   );
@@ -274,7 +307,7 @@ function ActivityBlock({
   caption: string;
   facts: [string, string][];
   heatmap: React.ReactNode;
-  note: string;
+  note: React.ReactNode;
   legend?: React.ReactNode;
 }) {
   return (

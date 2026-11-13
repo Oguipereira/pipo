@@ -70,7 +70,7 @@ export function EventForm({ event, defaultDate, projects }: Props) {
                 {WEEK_ORDER.map((d) => {
                   const on = (mask & (1 << d)) !== 0;
                   return (
-                    <label key={d} className={`grid h-10 flex-1 cursor-pointer place-items-center rounded-[3px] font-mono text-[12px] ${on ? "bg-heat-2 text-chalk" : "bg-heat-0 text-faint"}`}>
+                    <label key={d} className={`grid h-10 flex-1 cursor-pointer place-items-center rounded-[3px] font-mono text-[12px] transition-colors ${on ? "bg-heat-3 font-semibold text-ink" : "text-faint ring-1 ring-inset ring-seam hover:text-dust"}`}>
                       <input type="checkbox" name="day" value={d} checked={on} onChange={() => setMask(mask ^ (1 << d))} className="sr-only" />
                       {WEEKDAYS_PT[d]}
                     </label>

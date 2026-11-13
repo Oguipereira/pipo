@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { saveHabit, type FormState } from "@/app/(app)/habitos/actions";
 import { WEEKDAYS_PT } from "@/lib/dates";
-import { SCHEDULE_PRESETS, type Habit, type HabitKind } from "@/lib/habits";
+import { scheduleLabel, SCHEDULE_PRESETS, type Habit, type HabitKind } from "@/lib/habits";
 import type { Category } from "@/lib/data/habits";
 
 type Props = { categories: Category[]; habit?: Habit; today: string };
@@ -135,6 +135,15 @@ export function HabitForm({ categories, habit, today }: Props) {
             );
           })}
         </div>
+        <p className="mt-2 text-[13px] text-dust" aria-live="polite">
+          {mask ? (
+            <>
+              Vale em: <span className="text-chalk">{scheduleLabel(mask)}</span>
+            </>
+          ) : (
+            "Nenhum dia escolhido."
+          )}
+        </p>
         <div className="mt-3 flex flex-wrap gap-4 text-[13px]">
           {SCHEDULE_PRESETS.map((p) => (
             <button
@@ -187,8 +196,8 @@ function chipClass(selected: boolean) {
 }
 
 function dayClass(on: boolean) {
-  return `grid h-10 flex-1 place-items-center rounded-[3px] font-mono text-[12px] ${
-    on ? "bg-heat-2 text-chalk" : "bg-heat-0 text-faint"
+  return `grid h-10 flex-1 place-items-center rounded-[3px] font-mono text-[12px] transition-colors ${
+    on ? "bg-heat-3 font-semibold text-ink" : "text-faint ring-1 ring-inset ring-seam hover:text-dust"
   }`;
 }
 
