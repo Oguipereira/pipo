@@ -230,7 +230,7 @@ docs/
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | público | chave publicável (RLS protege os dados) |
 | `SUPABASE_SECRET_KEY` | servidor | sync e cron (ignora RLS, uso restrito) |
 | `GITHUB_TOKEN` | servidor | PAT fine-grained read-only |
-| `CRON_SECRET` | servidor | autentica chamadas do pg_cron |
+| `CRON_SECRET` | servidor | opcional; o segredo do pg_cron fica no Vault |
 
 ---
 
@@ -318,4 +318,5 @@ O dashboard ganha blocos ao longo das fases.
 | 2026-11-13 | Hábito automático calculado na leitura a partir de `commits` (sem gravar `habit_logs`); um registro manual corrige o dia. |
 | 2026-11-13 | Agenda com data + horário de parede (não `timestamptz`), para recorrências não mudarem com horário de verão. |
 | 2026-11-13 | Modo demonstração (`PIPO_DEMO=1`, só em desenvolvimento) para prints e revisão visual sem banco. |
+| 2026-11-13 | Segredo do pg_cron gerado e guardado só no Vault, conferido por `verify_cron_secret` (service_role); `CRON_SECRET` na env vira opcional. |
 | 2026-11-13 | Relatório em `/relatorio/AAAA-MM`; dados do mês anterior calculados com a mesma função para a comparação. |

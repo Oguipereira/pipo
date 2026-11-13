@@ -36,7 +36,7 @@ O pipo junta num lugar só a sua atividade no GitHub, os hábitos do dia a dia, 
 ```mermaid
 flowchart LR
   subgraph Supabase
-    cron[pg_cron a cada 4h] -->|POST + CRON_SECRET| api
+    cron[pg_cron a cada 4h] -->|POST + segredo do Vault| api
     db[(Postgres + RLS)]
   end
   user[Celular / navegador] -->|sessão| next[Next.js na Vercel]
@@ -91,18 +91,17 @@ Banco local (Docker): `npx supabase start` aplica as migrations de `supabase/mig
 | `NEXT_PUBLIC_SITE_URL` | público | URL do app, usada no retorno do login |
 | `SUPABASE_SECRET_KEY` | servidor | grava o cache do GitHub na sincronização |
 | `GITHUB_TOKEN` | servidor | token fine-grained somente leitura |
-| `CRON_SECRET` | servidor | autentica as chamadas do pg_cron |
+| `CRON_SECRET` | servidor | opcional; por padrão o segredo do pg_cron fica no Vault |
 
 ## Conectando o GitHub
 
 1. **Login.** Crie um OAuth App no GitHub (Settings → Developer settings → OAuth Apps) com callback `https://<ref>.supabase.co/auth/v1/callback` e ative o provider GitHub no Supabase (Authentication → Sign In / Providers). Em URL Configuration, coloque a URL do app como Site URL e `<url>/auth/callback` em Redirect URLs.
 2. **Token de leitura.** Em GitHub → Settings → Developer settings → Fine-grained tokens, crie um token com acesso a **todos os repositórios** e as permissões **Contents: read** e **Metadata: read**. Salve como `GITHUB_TOKEN` na Vercel.
 3. **Chave secreta.** Em Supabase → Settings → API Keys, copie a secret key para `SUPABASE_SECRET_KEY` na Vercel.
-4. **Sincronização automática.** Gere um segredo (`openssl rand -hex 32`), salve como `CRON_SECRET` na Vercel e rode uma vez no SQL Editor do Supabase:
+4. **Sincronização automática.** O segredo do agendador é gerado dentro do banco (migration `cron_secret_in_vault`) e conferido pela função `verify_cron_secret`, então não precisa ir para a Vercel. Falta só a URL do app, uma vez, no SQL Editor do Supabase:
 
    ```sql
    select vault.create_secret('https://SEU-APP.vercel.app', 'pipo_app_url');
-   select vault.create_secret('O-MESMO-CRON_SECRET', 'pipo_cron_secret');
    ```
 
 Depois disso, abra **código → Sincronizar agora**. A primeira vez traz o último ano e pode levar alguns minutos (e algumas rodadas para analisar as linguagens de todos os commits).

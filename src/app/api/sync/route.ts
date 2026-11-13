@@ -13,11 +13,12 @@ const LOCK_MINUTES = 10;
 
 /**
  * POST /api/sync
- * - Com `Authorization: Bearer $CRON_SECRET` (pg_cron, a cada 4h): sincroniza todos os usuários.
+ * - Com o segredo do agendador (pg_cron, a cada 4h, lido do Vault): sincroniza todos os usuários.
  * - Com a sessão do usuário (botão "sincronizar agora"): sincroniza só ele.
  */
 export async function POST(request: NextRequest) {
-  const cron = isCron(request);
+  const bearer = request.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1] ?? null;
+  const cron = bearer !== null && (await isCronSecret(bearer));
 
   // Autentica antes de qualquer outra resposta.
   let userId: string | undefined;
@@ -75,11 +76,18 @@ async function runFor(admin: AdminClient, userId: string, timezone: string, trig
   return syncUser({ db: admin, userId, timezone, token, trigger, budgetMs });
 }
 
-function isCron(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const header = request.headers.get("authorization");
-  if (!secret || !header?.startsWith("Bearer ")) return false;
-  const given = Buffer.from(header.slice(7));
-  const expected = Buffer.from(secret);
-  return given.length === expected.length && timingSafeEqual(given, expected);
+/**
+ * O segredo do pg_cron fica no Vault do Supabase (conferido pela função
+ * verify_cron_secret, só para service_role). CRON_SECRET na env é opcional.
+ */
+async function isCronSecret(given: string): Promise<boolean> {
+  const env = process.env.CRON_SECRET;
+  if (env) {
+    const a = Buffer.from(given);
+    const b = Buffer.from(env);
+    if (a.length === b.length && timingSafeEqual(a, b)) return true;
+  }
+  if (!process.env.SUPABASE_SECRET_KEY || given.length > 200) return false;
+  const { data } = await createAdminClient().rpc("verify_cron_secret", { p_secret: given });
+  return data === true;
 }

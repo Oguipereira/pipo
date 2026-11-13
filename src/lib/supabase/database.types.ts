@@ -890,6 +890,7 @@ export type Database = {
           repo_id: string
         }[]
       }
+      verify_cron_secret: { Args: { p_secret: string }; Returns: boolean }
     }
     Enums: {
       habit_kind: "boolean" | "quantity" | "github"
