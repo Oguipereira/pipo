@@ -20,13 +20,14 @@ type Props = { day: string; items: CheckInItem[]; emptyText?: React.ReactNode };
 /** Lista de hábitos do dia, marcáveis com um toque. Atualiza na hora e salva em segundo plano. */
 export function CheckIn({ day, items, emptyText }: Props) {
   const [optimistic, setOptimistic] = useOptimistic(
-    new Map(items.map((i) => [i.habit.id, i.value])),
-    (state, { id, value }: { id: string; value: number }) => new Map(state).set(id, value),
+    new Map(items.map((i) => [i.habit.id, { value: i.value, hasLog: i.hasLog }])),
+    (state, { id, value }: { id: string; value: number | null }) =>
+      new Map(state).set(id, { value: value ?? 0, hasLog: value !== null }),
   );
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function save(id: string, value: number) {
+  function save(id: string, value: number | null) {
     setError(null);
     startTransition(async () => {
       setOptimistic({ id, value });
@@ -48,8 +49,8 @@ export function CheckIn({ day, items, emptyText }: Props) {
         {items.map((item) => (
           <CheckInRow
             key={item.habit.id}
-            item={item}
-            value={optimistic.get(item.habit.id) ?? 0}
+            item={{ ...item, hasLog: optimistic.get(item.habit.id)?.hasLog ?? item.hasLog }}
+            value={optimistic.get(item.habit.id)?.value ?? 0}
             onChange={(v) => save(item.habit.id, v)}
           />
         ))}
@@ -63,7 +64,16 @@ export function CheckIn({ day, items, emptyText }: Props) {
   );
 }
 
-function CheckInRow({ item, value, onChange }: { item: CheckInItem; value: number; onChange: (v: number) => void }) {
+function CheckInRow({
+  item,
+  value,
+  onChange,
+}: {
+  item: CheckInItem;
+  value: number;
+  /** null apaga o registro (no automático, volta a contar pelos commits). */
+  onChange: (v: number | null) => void;
+}) {
   const { habit } = item;
 
   if (habit.kind === "quantity") {
@@ -89,10 +99,26 @@ function CheckInRow({ item, value, onChange }: { item: CheckInItem; value: numbe
         : "marca sozinho com o primeiro commit";
     return (
       <li className="flex items-center gap-4 py-3.5">
-        <span aria-hidden className={`block size-7 shrink-0 rounded-[4px] ${done ? "bg-heat-4" : "bg-heat-0"}`} />
+        <button
+          type="button"
+          onClick={() => onChange(done ? 0 : 1)}
+          aria-pressed={done}
+          aria-label={done ? "Marcar como não feito (corrige o automático)" : "Marcar como feito (corrige o automático)"}
+          className={`block size-7 shrink-0 rounded-[4px] ${done ? "bg-heat-4" : "bg-heat-0 ring-1 ring-inset ring-seam"}`}
+        />
         <div className="min-w-0 flex-1">
           <HabitName item={item} done={done} />
-          <p className="mt-0.5 text-[12px] text-faint">{caption}</p>
+          <p className="mt-0.5 text-[12px] text-faint">
+            {caption}
+            {item.hasLog ? (
+              <>
+                {" "}
+                <button type="button" onClick={() => onChange(null)} className="underline decoration-seam underline-offset-4 hover:text-dust">
+                  voltar ao automático
+                </button>
+              </>
+            ) : null}
+          </p>
         </div>
       </li>
     );

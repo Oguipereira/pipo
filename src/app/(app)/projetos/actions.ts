@@ -203,6 +203,14 @@ export async function updateTask(id: string, fd: FormData) {
   if (!parsed.success) return;
   const v = parsed.data;
   const supabase = await createClient();
+  if (v.milestoneId) {
+    // O marco precisa ser do mesmo projeto da tarefa.
+    const [{ data: task }, { data: milestone }] = await Promise.all([
+      supabase.from("tasks").select("project_id").eq("id", id).single(),
+      supabase.from("milestones").select("project_id").eq("id", v.milestoneId).single(),
+    ]);
+    if (!task || !milestone || task.project_id !== milestone.project_id) return;
+  }
   await supabase
     .from("tasks")
     .update({ title: v.title, notes: v.notes, due_date: v.dueDate, milestone_id: v.milestoneId, category_id: v.categoryId })

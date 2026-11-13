@@ -2,7 +2,7 @@
 
 > Controle pessoal de hábitos, código e projetos para devs. Um quadradinho por dia.
 
-Status: **aprovada** (2026-11-12). Este documento é a fonte da verdade do produto; decisões que mudarem durante a implementação são registradas aqui e na seção [Registro de decisões](#registro-de-decisões).
+Status: **aprovada** (2026-11-12) · **implementada** (fases 1–8, 2026-11-13). Este documento é a fonte da verdade do produto; decisões que mudarem durante a implementação são registradas aqui e na seção [Registro de decisões](#registro-de-decisões).
 
 ---
 
@@ -112,7 +112,7 @@ Conjunto pequeno, por usuário, editável. Seed padrão:
 
 **Linguagens** — "o que eu programo de verdade":
 
-- Para cada commit, buscar os arquivos alterados (REST `GET /repos/{o}/{r}/commits/{sha}`) e guardar extensão + linhas adicionadas/removidas em `commit_files`. Commits são imutáveis: cada um é buscado **uma única vez**.
+- Para cada commit, buscar os arquivos alterados (REST `GET /repos/{o}/{r}/commits/{sha}`) e guardar as linhas adicionadas/removidas por linguagem em `commit_languages` (agregado por commit, em vez de um registro por arquivo). Commits são imutáveis: cada um é buscado **uma única vez**.
 - Extensão → linguagem por um mapa no estilo do Linguist (`src/lib/languages.ts`), ignorando lockfiles, arquivos gerados e vendor.
 - Peso = linhas alteradas (adições + remoções).
 - O backfill é feito aos poucos, respeitando o rate limit (5.000 req/h do PAT; custo zero).
@@ -137,7 +137,8 @@ Conjunto pequeno, por usuário, editável. Seed padrão:
 - **Vínculo commit ↔ tarefa** sem LLM:
   - Padrão: `#T<número>`, sem diferenciar maiúsculas, pode haver vários por commit, não casa no meio de palavras (`abc#T12` não conta). Parser em `src/lib/task-refs.ts` (testado).
   - Todo commit com referência aparece dentro da tarefa (`task_commits`).
-  - **Se a tarefa for de categoria `is_code`**, o commit também a marca como **feita** (`done_via = 'commit'`). Nas demais categorias, o commit só fica vinculado.
+  - **Se a tarefa for de categoria `is_code`** (ou, sem categoria própria, se o projeto for), o commit mais antigo que a cita a marca como **feita** (`done_via = 'commit'`). Nas demais categorias, o commit só fica vinculado.
+  - Ao criar a tarefa T12, commits antigos que já citavam `#T12` também são vinculados.
   - Se o usuário reabrir manualmente uma tarefa fechada por commit, aquele mesmo commit não a fecha de novo; só um commit novo.
 
 ### 4.6 Agenda de estudos (cronograma)
@@ -246,7 +247,7 @@ Todas as tabelas de domínio: `id uuid`, `user_id uuid → auth.users`, `created
 | `repos` | `github_id`, `full_name`, `default_branch`, `is_private`, `is_fork`, `ignored`, `pushed_at`, `last_synced_at` |
 | `repo_languages` | `repo_id`, `language`, `bytes` |
 | `commits` | `repo_id`, `sha`, `message`, `committed_at`, `local_date`, `url`, `additions`, `deletions`, `files_fetched` |
-| `commit_files` | `commit_id`, `extension`, `language`, `additions`, `deletions` |
+| `commit_languages` | `commit_id`, `language`, `files`, `additions`, `deletions` |
 | `dependencies` | `repo_id`, `ecosystem`, `name`, `version`, `is_dev`, `manifest_path` |
 | `library_categories` | `ecosystem`, `name`, `category` (override do usuário) |
 | `contribution_days` | `date`, `count`, `level` — único (`user_id`, `date`) |
@@ -255,11 +256,15 @@ Todas as tabelas de domínio: `id uuid`, `user_id uuid → auth.users`, `created
 | `milestones` | `project_id`, `title`, `position`, `due_date` |
 | `tasks` | `project_id`, `milestone_id`, `number` (único por usuário), `title`, `status`, `due_date`, `position`, `category_id`, `done_at`, `done_via` |
 | `task_commits` | `task_id`, `commit_id` |
-| `events` | `title`, `type`, `starts_at`, `ends_at`, `recurrence_days`, `recurrence_until`, `category_id`, `project_id`, `task_id`, `notes`, `location` |
+| `events` | `title`, `type`, `date`, `start_time`, `end_time` (horário de parede), `recurrence_days`, `recurrence_until`, `category_id`, `project_id`, `task_id`, `notes`, `location` |
 | `event_exceptions` | `event_id`, `date` (ocorrência cancelada) |
 | `sync_runs` | `started_at`, `finished_at`, `status`, `trigger` (`manual`/`cron`), `stats` (jsonb), `rate_limit_remaining`, `error` |
 
-Esquema `private` (sem acesso pela API): `allowed_github_ids`.
+Esquema `private` (sem acesso pela API): `allowed_github_ids` e funções internas (triggers, `own_table`, `trigger_github_sync`).
+
+Todas as FKs entre tabelas de domínio são compostas `(id, user_id)`: o banco garante que nada aponta para dados de outro usuário. Tabelas de cache do GitHub são somente leitura para o usuário; quem grava é a sincronização (chave secreta, sempre filtrando por `user_id`).
+
+Funções SQL (`security invoker`, respeitam RLS): `commit_counts`, `repo_commit_counts`, `language_stats`, `language_monthly`, `library_usage`, `project_commit_counts`, `project_activity`.
 
 ---
 
@@ -306,3 +311,11 @@ O dashboard ganha blocos ao longo das fases.
 | 2026-11-12 | Instalação como página web na tela inicial do iPhone, sem service worker na v1. |
 | 2026-11-12 | Nova fase: agenda de estudos estilo Notion. |
 | 2026-11-12 | Gráficos em SVG próprio, sem biblioteca de gráficos. |
+| 2026-11-13 | Visual mais sutil: um heatmap por vez (código/hábitos), sem painéis, números em uma linha. |
+| 2026-11-13 | FKs compostas `(id, user_id)` em todas as relações entre tabelas de domínio. |
+| 2026-11-13 | Sincronização grava com a chave secreta (rota `/api/sync`); cache do GitHub é somente leitura para o usuário. `task_commits` aceita inserção do dono (vínculo retroativo ao criar tarefa). |
+| 2026-11-13 | Linguagens agregadas por commit em `commit_languages` (não um registro por arquivo). |
+| 2026-11-13 | Hábito automático calculado na leitura a partir de `commits` (sem gravar `habit_logs`); um registro manual corrige o dia. |
+| 2026-11-13 | Agenda com data + horário de parede (não `timestamptz`), para recorrências não mudarem com horário de verão. |
+| 2026-11-13 | Modo demonstração (`PIPO_DEMO=1`, só em desenvolvimento) para prints e revisão visual sem banco. |
+| 2026-11-13 | Relatório em `/relatorio/AAAA-MM`; dados do mês anterior calculados com a mesma função para a comparação. |

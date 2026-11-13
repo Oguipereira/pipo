@@ -69,7 +69,7 @@ export function RadialChart({ slices, size = 320, format = pct, label }: Props) 
 
 function pct(value: number, total: number) {
   const p = (value / total) * 100;
-  return `${p < 1 ? p.toFixed(1) : Math.round(p)}%`;
+  return `${p < 1 ? p.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : Math.round(p)}%`;
 }
 
 /** Fatia de anel com cantos externos arredondados. */

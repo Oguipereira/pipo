@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   description: "Hábitos, código e projetos. Um quadradinho por dia.",
   applicationName: "pipo",
   robots: { index: false, follow: false },
+  // Tela inicial do iPhone: abre sem a barra do Safari, com a barra de status sobre o fundo.
+  appleWebApp: { capable: true, title: "pipo", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {

@@ -17,12 +17,26 @@ const LOCK_MINUTES = 10;
  * - Com a sessão do usuário (botão "sincronizar agora"): sincroniza só ele.
  */
 export async function POST(request: NextRequest) {
+  const cron = isCron(request);
+
+  // Autentica antes de qualquer outra resposta.
+  let userId: string | undefined;
+  let timezone = DEFAULT_TIMEZONE;
+  if (!cron) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getClaims();
+    userId = data?.claims?.sub;
+    if (!userId) return NextResponse.json({ error: "Faça login." }, { status: 401 });
+    const { data: profile } = await supabase.from("profiles").select("timezone").eq("id", userId).single();
+    timezone = profile?.timezone ?? DEFAULT_TIMEZONE;
+  }
+
   if (!process.env.SUPABASE_SECRET_KEY) {
     return NextResponse.json({ error: "SUPABASE_SECRET_KEY não configurada no servidor." }, { status: 503 });
   }
   const admin = createAdminClient();
 
-  if (isCron(request)) {
+  if (cron) {
     const { data: profiles, error } = await admin.from("profiles").select("id, timezone");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const results = [];
@@ -33,13 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ results });
   }
 
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-  if (!userId) return NextResponse.json({ error: "Faça login." }, { status: 401 });
-
-  const { data: profile } = await supabase.from("profiles").select("timezone").eq("id", userId).single();
-  const result = await runFor(admin, userId, profile?.timezone ?? DEFAULT_TIMEZONE, "manual", 55_000);
+  const result = await runFor(admin, userId!, timezone, "manual", 55_000);
   const status = result.status === "running" ? 409 : result.status === "error" ? 502 : 200;
   return NextResponse.json(result, { status });
 }
