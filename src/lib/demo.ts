@@ -330,3 +330,28 @@ export function demoProjectActivity(from: Day, to: Day) {
   }
   return map;
 }
+
+// ---------------------------------------------------------------------------
+// Agenda
+// ---------------------------------------------------------------------------
+
+export function demoEvents(): import("./agenda").AgendaEvent[] {
+  const today = demoToday();
+  const base = {
+    location: null,
+    notes: null,
+    categoryId: null,
+    projectId: null,
+    taskId: null,
+    exceptions: [] as Day[],
+    recurrenceUntil: null,
+  };
+  return [
+    { ...base, id: "00000000-0000-4000-d000-000000000001", title: "Cálculo II", type: "aula", date: addDays(today, -60), startTime: "19:00:00", endTime: "20:40:00", recurrenceDays: 0b0001010, location: "Bloco B, sala 204" },
+    { ...base, id: "00000000-0000-4000-d000-000000000002", title: "Estruturas de dados", type: "aula", date: addDays(today, -60), startTime: "20:50:00", endTime: "22:30:00", recurrenceDays: 0b0010100 },
+    { ...base, id: "00000000-0000-4000-d000-000000000003", title: "LeetCode", type: "estudo", date: addDays(today, -30), startTime: "07:00:00", endTime: "08:00:00", recurrenceDays: 0b0111110 },
+    { ...base, id: "00000000-0000-4000-d000-000000000004", title: "Prova de Cálculo II", type: "prova", date: addDays(today, 6), startTime: "19:00:00", endTime: "21:00:00", recurrenceDays: null },
+    { ...base, id: "00000000-0000-4000-d000-000000000005", title: "Entrega do trabalho de ED", type: "entrega", date: addDays(today, 3), startTime: null, endTime: null, recurrenceDays: null },
+    { ...base, id: "00000000-0000-4000-d000-000000000006", title: "Revisão da semana", type: "estudo", date: addDays(today, -20), startTime: "10:00:00", endTime: "11:30:00", recurrenceDays: 0b1000000 },
+  ];
+}

@@ -5,6 +5,9 @@ import { addDays, diffDays, type Day } from "@/lib/dates";
 import { checkInItems, loadHabitBoard, type HabitBoard } from "@/lib/data/board";
 import { getContributionDays } from "@/lib/data/github";
 import { getProjects, type Project } from "@/lib/data/projects";
+import { getEvents } from "@/lib/data/agenda";
+import { occurrences, upcomingDeadlines, countdown, type Occurrence } from "@/lib/agenda";
+import { OccurrenceItem } from "@/components/occurrence";
 import { dueLabel, nextTask } from "@/lib/projects";
 import { dayCompletion } from "@/lib/habits";
 import { buildGrid, levelFromCount, levelFromRatio, type Level } from "@/lib/heatmap";
@@ -30,7 +33,13 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
   const yesterday = addDays(today, -1);
   const day = query.dia === "ontem" ? yesterday : today;
   const yearStart = addDays(today, -364);
-  const [contributions, projects] = await Promise.all([getContributionDays(yearStart, today), getProjects()]);
+  const [contributions, projects, events] = await Promise.all([
+    getContributionDays(yearStart, today),
+    getProjects(),
+    getEvents(),
+  ]);
+  const todayEvents = occurrences(events, today, today);
+  const nextDeadline = upcomingDeadlines(events, addDays(today, 1), 30)[0];
 
   const dateLabel = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
@@ -86,9 +95,39 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
       </section>
 
       <div className="grid gap-12 md:grid-cols-2">
+        <TodayAgenda items={todayEvents} next={nextDeadline} today={today} />
         <NextSteps projects={projects.filter((p) => p.status === "active")} today={today} />
       </div>
     </div>
+  );
+}
+
+function TodayAgenda({ items, next, today }: { items: Occurrence[]; next?: Occurrence; today: Day }) {
+  return (
+    <section>
+      <h2 className="text-[13px] text-faint">na agenda hoje</h2>
+      {items.length ? (
+        <ul className="mt-1">
+          {items.map((o) => (
+            <li key={o.event.id}>
+              <OccurrenceItem occurrence={o} today={today} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-[15px] text-dust">
+          Nada marcado. <InlineLink href="/agenda/novo">Novo compromisso</InlineLink>
+        </p>
+      )}
+      {next ? (
+        <p className="mt-3 text-[13px] text-faint">
+          <span className="text-alert/90">{countdown(next.day, today)}</span>:{" "}
+          <Link href={`/agenda/${next.event.id}?dia=${next.day}`} className="text-dust hover:text-chalk">
+            {next.event.title}
+          </Link>
+        </p>
+      ) : null}
+    </section>
   );
 }
 
