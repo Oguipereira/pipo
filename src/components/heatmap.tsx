@@ -11,12 +11,28 @@ type HeatmapProps = {
   sweep?: boolean;
   cell?: number;
   gap?: number;
+  /** Quadradinhos clicáveis (usado com <DayPicker>). */
+  interactive?: boolean;
+  /** No desktop, estica para a largura da coluna. Desligue em heatmaps pequenos. */
+  fluid?: boolean;
+  /** Mostra rótulos de meses e dias da semana. */
+  labels?: boolean;
 };
 
-const LEFT = 28;
-const TOP = 18;
 
-export function Heatmap({ grid, label, highlight, sweep = false, cell = 11, gap = 3 }: HeatmapProps) {
+export function Heatmap({
+  grid,
+  label,
+  highlight,
+  sweep = false,
+  cell = 11,
+  gap = 3,
+  interactive = false,
+  fluid = true,
+  labels = true,
+}: HeatmapProps) {
+  const LEFT = labels ? 28 : 0;
+  const TOP = labels ? 18 : 0;
   const step = cell + gap;
   const width = LEFT + grid.weeks.length * step - gap;
   const height = TOP + 7 * step - gap;
@@ -24,14 +40,16 @@ export function Heatmap({ grid, label, highlight, sweep = false, cell = 11, gap 
   return (
     <div className="scroll-end overflow-x-auto">
       {/* min-w-full: alinha à esquerda quando cabe; w-max: rola a partir de hoje quando não cabe */}
-      <div className="w-max min-w-full md:w-full">
+      <div className={`w-max min-w-full ${fluid ? "md:w-full" : ""}`}>
       <svg
         role="img"
         aria-label={label}
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
-        className={`block shrink-0 md:h-auto md:w-full md:max-w-[1100px] ${sweep ? "heat-sweep" : ""}`}
+        className={`block shrink-0 ${fluid ? "md:h-auto md:w-full md:max-w-[1100px]" : ""} ${sweep ? "heat-sweep" : ""} ${
+          interactive ? "[&_rect[data-day]]:cursor-pointer [&_rect[data-day]:hover]:opacity-80" : ""
+        }`}
       >
         <defs>
           <pattern id="pipo-off" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -40,7 +58,7 @@ export function Heatmap({ grid, label, highlight, sweep = false, cell = 11, gap 
           </pattern>
         </defs>
 
-        {grid.months.map((m) => (
+        {labels && grid.months.map((m) => (
           <text
             key={`${m.column}-${m.label}`}
             x={LEFT + m.column * step}
@@ -51,7 +69,7 @@ export function Heatmap({ grid, label, highlight, sweep = false, cell = 11, gap 
           </text>
         ))}
 
-        {[1, 3, 5].map((d) => (
+        {labels && [1, 3, 5].map((d) => (
           <text
             key={d}
             x={0}
@@ -70,6 +88,7 @@ export function Heatmap({ grid, label, highlight, sweep = false, cell = 11, gap 
               <rect
                 key={day.day}
                 data-c={c}
+                data-day={day.day}
                 style={sweep ? ({ "--c": c } as React.CSSProperties) : undefined}
                 x={LEFT + c * step}
                 y={TOP + r * step}

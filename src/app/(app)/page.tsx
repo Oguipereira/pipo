@@ -1,52 +1,41 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { getViewer } from "@/lib/auth";
-import { addDays, today as todayIn, type Day } from "@/lib/dates";
-import { buildGrid, levelFromCount, levelFromRatio } from "@/lib/heatmap";
+import { addDays, diffDays, type Day } from "@/lib/dates";
+import { checkInItems, loadHabitBoard, type HabitBoard } from "@/lib/data/board";
+import { getContributionDays } from "@/lib/data/github";
+import { dayCompletion } from "@/lib/habits";
+import { buildGrid, levelFromCount, levelFromRatio, type Level } from "@/lib/heatmap";
 import { sampleContributions, sampleHabitRatios } from "@/lib/sample";
 import { computeStreaks } from "@/lib/streak";
+import { CheckIn } from "@/components/check-in";
 import { Heatmap, HeatLegend } from "@/components/heatmap";
 import { HeatSwitch } from "@/components/heat-switch";
 import { PageHeader } from "@/components/page-header";
 
-export default function DashboardPage() {
+export default function DashboardPage({ searchParams }: PageProps<"/">) {
   return (
     <Suspense fallback={<DashboardSkeleton />}>
-      <Dashboard />
+      <Dashboard searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Dashboard() {
-  const viewer = await getViewer();
-  const now = new Date();
-  const today = todayIn(viewer.timezone, now);
+async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
+  const [viewer, query] = await Promise.all([getViewer(), searchParams]);
+  const board = await loadHabitBoard(viewer.timezone);
+  const { today } = board;
+  const yesterday = addDays(today, -1);
+  const day = query.dia === "ontem" ? yesterday : today;
   const yearStart = addDays(today, -364);
+  const contributions = await getContributionDays(yearStart, today);
+
   const dateLabel = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
     day: "numeric",
     month: "long",
-    timeZone: viewer.timezone,
-  }).format(now);
-
-  // Fase 1: dados de exemplo. A fase 3 troca por contribution_days/commits reais.
-  const commits = sampleContributions(today);
-  const habits = sampleHabitRatios(today);
-  const maxCommits = Math.max(...commits.values());
-
-  const commitGrid = buildGrid(today, (day) => {
-    const n = commits.get(day) ?? 0;
-    return { level: levelFromCount(n, maxCommits), label: `${n} commit${n === 1 ? "" : "s"} em ${fmt(day)}` };
-  });
-  const habitGrid = buildGrid(today, (day) => {
-    const r = habits.get(day) ?? 0;
-    return { level: levelFromRatio(r), label: `${Math.round(r * 100)}% dos hábitos em ${fmt(day)}` };
-  });
-
-  const totalCommits = sum(commits, yearStart, today);
-  const commitStreak = computeStreaks((d) => (commits.get(d) ?? 0) > 0, { start: yearStart, today });
-  const habitAvg = average(habits, yearStart, today);
-  const perfectStreak = computeStreaks((d) => (habits.get(d) ?? 0) >= 1, { start: yearStart, today });
+    timeZone: "UTC",
+  }).format(new Date(`${today}T12:00:00Z`));
 
   return (
     <div className="space-y-14">
@@ -55,61 +44,142 @@ async function Dashboard() {
         <p className="mt-3 text-[15px] text-dust first-letter:uppercase">{dateLabel}</p>
       </div>
 
+      <section aria-labelledby="checkin">
+        <div className="mb-2 flex items-baseline justify-between gap-4">
+          <h2 id="checkin" className="text-[13px] text-faint">
+            para marcar
+          </h2>
+          <nav aria-label="Dia do check-in" className="flex gap-4 text-[13px]">
+            <DayLink href="/" active={day === today}>
+              hoje
+            </DayLink>
+            <DayLink href="/?dia=ontem" active={day === yesterday}>
+              ontem
+            </DayLink>
+          </nav>
+        </div>
+        <CheckIn
+          day={day}
+          items={checkInItems(board, day)}
+          emptyText={
+            board.habits.length === 0 ? (
+              <>
+                Seus hábitos do dia aparecem aqui, prontos para marcar com um toque.{" "}
+                <InlineLink href="/habitos/novo">Criar o primeiro</InlineLink>
+              </>
+            ) : (
+              "Nenhum hábito agendado para este dia."
+            )
+          }
+        />
+      </section>
+
       <section aria-label="Atividade no último ano">
         <HeatSwitch
           views={[
-            {
-              key: "code",
-              label: "código",
-              content: (
-                <ActivityBlock
-                  value={totalCommits.toLocaleString("pt-BR")}
-                  caption="commits no último ano"
-                  facts={[
-                    ["sequência atual", days(commitStreak.current)],
-                    ["recorde", days(commitStreak.best)],
-                  ]}
-                  heatmap={
-                    <Heatmap grid={commitGrid} label="Commits por dia no último ano" highlight={today} sweep />
-                  }
-                  note="Exemplo. Seus commits aparecem aqui quando o GitHub for conectado."
-                />
-              ),
-            },
-            {
-              key: "habits",
-              label: "hábitos",
-              content: (
-                <ActivityBlock
-                  value={`${Math.round(habitAvg * 100)}%`}
-                  caption="dos hábitos cumpridos no último ano"
-                  facts={[
-                    ["dias perfeitos seguidos", String(perfectStreak.current)],
-                    ["recorde", String(perfectStreak.best)],
-                  ]}
-                  heatmap={
-                    <Heatmap grid={habitGrid} label="Hábitos cumpridos por dia no último ano" highlight={today} />
-                  }
-                  note="Exemplo. Seus hábitos aparecem aqui quando você criar o primeiro."
-                  legend={<HeatLegend less="0%" more="100%" />}
-                />
-              ),
-            },
+            { key: "code", label: "código", content: <CodeActivity today={today} yearStart={yearStart} days={contributions} /> },
+            { key: "habits", label: "hábitos", content: <HabitActivity board={board} yearStart={yearStart} /> },
           ]}
         />
       </section>
 
       <div className="grid gap-12 md:grid-cols-2">
-        <Quiet title="para marcar hoje">
-          Quando você criar hábitos, os de hoje ficam aqui para marcar com um toque.{" "}
-          <InlineLink href="/habitos">Hábitos</InlineLink>
-        </Quiet>
         <Quiet title="próximos passos">
           Cada projeto ativo mostra aqui a próxima tarefa do plano.{" "}
           <InlineLink href="/projetos">Projetos</InlineLink>
         </Quiet>
       </div>
     </div>
+  );
+}
+
+function CodeActivity({
+  today,
+  yearStart,
+  days,
+}: {
+  today: Day;
+  yearStart: Day;
+  days: { date: Day; count: number; level: number }[];
+}) {
+  const real = days.some((d) => d.count > 0);
+  const counts = real ? new Map(days.map((d) => [d.date, d.count])) : sampleContributions(today);
+  const levels = real ? new Map(days.map((d) => [d.date, d.level as Level])) : null;
+  const max = Math.max(1, ...counts.values());
+
+  const grid = buildGrid(today, (day) => {
+    const n = counts.get(day) ?? 0;
+    return {
+      level: levels?.get(day) ?? levelFromCount(n, max),
+      label: `${n} contribuiç${n === 1 ? "ão" : "ões"} em ${fmt(day)}`,
+    };
+  });
+  const total = sumRange(counts, yearStart, today);
+  const streak = computeStreaks((d) => (counts.get(d) ?? 0) > 0, { start: yearStart, today });
+
+  return (
+    <ActivityBlock
+      value={total.toLocaleString("pt-BR")}
+      caption={real ? "contribuições no GitHub no último ano" : "commits no último ano"}
+      facts={[
+        ["sequência atual", plural(streak.current, "dia")],
+        ["recorde", plural(streak.best, "dia")],
+      ]}
+      heatmap={<Heatmap grid={grid} label="Contribuições por dia no último ano" highlight={today} sweep />}
+      note={
+        real
+          ? "Como o GitHub conta: commits, PRs, issues e reviews."
+          : "Exemplo. Suas contribuições aparecem aqui depois da primeira sincronização com o GitHub."
+      }
+    />
+  );
+}
+
+function HabitActivity({ board, yearStart }: { board: HabitBoard; yearStart: Day }) {
+  const { today, habits, ratio } = board;
+  const real = habits.length > 0;
+  const sample = real ? null : sampleHabitRatios(today);
+
+  const completion = (day: Day): number | null =>
+    sample ? (sample.get(day) ?? 0) : dayCompletion(habits, ratio, day);
+
+  const grid = buildGrid(today, (day) => {
+    const c = completion(day);
+    if (c === null) return { level: 0, off: true, label: `${fmt(day)}: nenhum hábito agendado` };
+    return { level: levelFromRatio(c), label: `${Math.round(c * 100)}% dos hábitos em ${fmt(day)}` };
+  });
+
+  const firstStart = real
+    ? habits.map((h) => h.startDate).reduce((a, b) => (a < b ? a : b))
+    : yearStart;
+  const start = diffDays(yearStart, firstStart) > 0 ? firstStart : yearStart;
+
+  let total = 0;
+  let count = 0;
+  for (let d = start; diffDays(d, today) >= 0; d = addDays(d, 1)) {
+    const c = completion(d);
+    if (c === null || (d === today && c === 0)) continue;
+    total += c;
+    count++;
+  }
+  const perfect = computeStreaks((d) => (completion(d) ?? 0) >= 1, {
+    start,
+    today,
+    isScheduled: (d) => completion(d) !== null,
+  });
+
+  return (
+    <ActivityBlock
+      value={`${count ? Math.round((total / count) * 100) : 0}%`}
+      caption="dos hábitos cumpridos no último ano"
+      facts={[
+        ["dias perfeitos seguidos", String(perfect.current)],
+        ["recorde", String(perfect.best)],
+      ]}
+      heatmap={<Heatmap grid={grid} label="Hábitos cumpridos por dia no último ano" highlight={today} />}
+      note={real ? "Média dos hábitos agendados em cada dia." : "Exemplo. Seus hábitos aparecem aqui quando você criar o primeiro."}
+      legend={<HeatLegend less="0%" more="100%" />}
+    />
   );
 }
 
@@ -149,11 +219,25 @@ function ActivityBlock({
   );
 }
 
+function DayLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      replace
+      scroll={false}
+      aria-current={active ? "true" : undefined}
+      className={active ? "text-chalk" : "text-faint hover:text-dust"}
+    >
+      {children}
+    </Link>
+  );
+}
+
 function Quiet({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
       <h2 className="text-[13px] text-faint">{title}</h2>
-      <p className="mt-2 max-w-[42ch] text-[15px] leading-relaxed text-dust">{children}</p>
+      <div className="mt-2 max-w-[42ch] text-[15px] leading-relaxed text-dust">{children}</div>
     </section>
   );
 }
@@ -166,23 +250,12 @@ function InlineLink({ href, children }: { href: string; children: React.ReactNod
   );
 }
 
-const days = (n: number) => `${n} ${n === 1 ? "dia" : "dias"}`;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-function sum(map: Map<Day, number>, from: Day, to: Day) {
+function sumRange(map: Map<Day, number>, from: Day, to: Day) {
   let total = 0;
   for (const [day, n] of map) if (day >= from && day <= to) total += n;
   return total;
-}
-
-function average(map: Map<Day, number>, from: Day, to: Day) {
-  let total = 0;
-  let count = 0;
-  for (const [day, n] of map) {
-    if (day < from || day > to) continue;
-    total += n;
-    count++;
-  }
-  return count ? total / count : 0;
 }
 
 function fmt(day: Day) {

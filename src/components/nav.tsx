@@ -17,7 +17,15 @@ function isActive(pathname: string, href: string) {
 
 /** Barra inferior no celular, coluna lateral no desktop. */
 export function Nav() {
-  const pathname = usePathname();
+  return <NavList pathname={usePathname()} />;
+}
+
+/** Mesma navegação sem item ativo: fallback enquanto a rota (dinâmica) resolve. */
+export function NavFallback() {
+  return <NavList pathname={null} />;
+}
+
+function NavList({ pathname }: { pathname: string | null }) {
 
   return (
     <nav
@@ -26,7 +34,7 @@ export function Nav() {
     >
       <ul className="mx-auto flex max-w-md justify-between px-3 pt-2 md:max-w-none md:flex-col md:gap-1 md:px-0 md:pt-0">
         {NAV_ITEMS.map((item) => {
-          const active = isActive(pathname, item.href);
+          const active = pathname !== null && isActive(pathname, item.href);
           return (
             <li key={item.href}>
               <Link

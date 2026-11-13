@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Nav } from "@/components/nav";
+import { Nav, NavFallback } from "@/components/nav";
 import { UserMenu, UserMenuFallback } from "@/components/user-menu";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
@@ -10,7 +10,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         <Link href="/" className="font-mono text-[15px] font-semibold tracking-tight text-chalk">
           pipo
         </Link>
-        <Nav />
+        <Suspense fallback={<NavFallback />}>
+          <Nav />
+        </Suspense>
         <div className="mt-auto">
           <Suspense fallback={<UserMenuFallback />}>
             <UserMenu />
@@ -31,7 +33,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
       </div>
 
       <div className="md:hidden">
-        <Nav />
+        <Suspense fallback={<NavFallback />}>
+          <Nav />
+        </Suspense>
       </div>
     </div>
   );

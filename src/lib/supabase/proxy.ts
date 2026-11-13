@@ -16,6 +16,11 @@ function isPublic(pathname: string) {
  * e cada página/ação valida a sessão de novo no servidor.
  */
 export async function updateSession(request: NextRequest) {
+  // Modo demonstração local (PIPO_DEMO=1): sem login. Ver src/lib/demo.ts.
+  if (process.env.PIPO_DEMO === "1" && process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(supabaseUrl(), supabasePublishableKey(), {
