@@ -233,3 +233,100 @@ export function demoLibraries() {
     lib("pypi", "ruff", 1, 310, true),
   ];
 }
+
+// ---------------------------------------------------------------------------
+// Projetos
+// ---------------------------------------------------------------------------
+
+export function demoProjects(): import("./data/projects").Project[] {
+  const today = demoToday();
+  const t = (
+    n: number,
+    title: string,
+    milestoneId: string | null,
+    status: "todo" | "doing" | "done",
+    position: number,
+    extra: { dueInDays?: number; via?: "commit" | "manual" } = {},
+  ) => ({
+    id: `00000000-0000-4000-b000-${String(n).padStart(12, "0")}`,
+    number: n,
+    title,
+    notes: null,
+    status,
+    dueDate: extra.dueInDays != null ? addDays(today, extra.dueInDays) : null,
+    milestoneId,
+    categoryId: null,
+    position,
+    doneAt: status === "done" ? `${addDays(today, -n)}T18:00:00Z` : null,
+    doneVia: status === "done" ? (extra.via ?? "manual") : null,
+  });
+  const m = (id: string, title: string, position: number) => ({ id, title, position, dueDate: null });
+  return [
+    {
+      id: "00000000-0000-4000-c000-000000000001",
+      name: "pipo",
+      description: "Hábitos, código e projetos de dev num quadradinho por dia.",
+      status: "active",
+      color: "#39d353",
+      categoryId: demoCategories[0].id,
+      position: 0,
+      repoIds: [DEMO_REPOS[0].id],
+      milestones: [m("m-1", "Fundação", 0), m("m-2", "Hábitos e GitHub", 1), m("m-3", "Lançamento", 2)],
+      tasks: [
+        t(1, "Login com GitHub e allowlist", "m-1", "done", 0, { via: "commit" }),
+        t(2, "Tema escuro e heatmap", "m-1", "done", 1),
+        t(3, "Check-in com um toque", "m-2", "done", 0, { via: "commit" }),
+        t(4, "Sincronização incremental", "m-2", "doing", 1, { dueInDays: 2 }),
+        t(5, "Relatório mensal", "m-3", "todo", 0, { dueInDays: 9 }),
+        t(6, "README com prints", "m-3", "todo", 1),
+      ],
+    },
+    {
+      id: "00000000-0000-4000-c000-000000000002",
+      name: "API de finanças",
+      description: "FastAPI + Postgres para controlar gastos.",
+      status: "active",
+      color: "#58a6ff",
+      categoryId: demoCategories[0].id,
+      position: 1,
+      repoIds: [DEMO_REPOS[1].id],
+      milestones: [m("m-4", "Transações", 0)],
+      tasks: [
+        t(7, "Endpoint de transações", "m-4", "done", 0, { via: "commit" }),
+        t(8, "Importar extrato OFX", "m-4", "todo", 1, { dueInDays: -1 }),
+        t(9, "Categorias automáticas", null, "todo", 0),
+      ],
+    },
+    {
+      id: "00000000-0000-4000-c000-000000000003",
+      name: "Portfólio",
+      description: null,
+      status: "paused",
+      color: "#d29922",
+      categoryId: null,
+      position: 2,
+      repoIds: [DEMO_REPOS[2].id],
+      milestones: [],
+      tasks: [t(10, "Página de projetos", null, "todo", 0)],
+    },
+  ];
+}
+
+export function demoProjectCommitCounts(projectId: string, from: Day, to: Day) {
+  const repoIds = demoProjects().find((p) => p.id === projectId)?.repoIds ?? [];
+  const map = new Map<Day, number>();
+  for (const c of demoCommitList()) {
+    if (!repoIds.includes(c.repoId) || c.localDate < from || c.localDate > to) continue;
+    map.set(c.localDate, (map.get(c.localDate) ?? 0) + 1);
+  }
+  return map;
+}
+
+export function demoProjectActivity(from: Day, to: Day) {
+  const map = new Map<string, { commits: number; lastCommitAt: string | null }>();
+  for (const p of demoProjects()) {
+    const commits = demoCommitList().filter((c) => p.repoIds.includes(c.repoId) && c.localDate >= from && c.localDate <= to);
+    map.set(p.id, { commits: commits.length, lastCommitAt: commits[0]?.committedAt ?? null });
+  }
+  return map;
+}

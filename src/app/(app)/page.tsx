@@ -4,6 +4,8 @@ import { getViewer } from "@/lib/auth";
 import { addDays, diffDays, type Day } from "@/lib/dates";
 import { checkInItems, loadHabitBoard, type HabitBoard } from "@/lib/data/board";
 import { getContributionDays } from "@/lib/data/github";
+import { getProjects, type Project } from "@/lib/data/projects";
+import { dueLabel, nextTask } from "@/lib/projects";
 import { dayCompletion } from "@/lib/habits";
 import { buildGrid, levelFromCount, levelFromRatio, type Level } from "@/lib/heatmap";
 import { sampleContributions, sampleHabitRatios } from "@/lib/sample";
@@ -28,7 +30,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
   const yesterday = addDays(today, -1);
   const day = query.dia === "ontem" ? yesterday : today;
   const yearStart = addDays(today, -364);
-  const contributions = await getContributionDays(yearStart, today);
+  const [contributions, projects] = await Promise.all([getContributionDays(yearStart, today), getProjects()]);
 
   const dateLabel = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
@@ -84,12 +86,45 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
       </section>
 
       <div className="grid gap-12 md:grid-cols-2">
-        <Quiet title="próximos passos">
-          Cada projeto ativo mostra aqui a próxima tarefa do plano.{" "}
-          <InlineLink href="/projetos">Projetos</InlineLink>
-        </Quiet>
+        <NextSteps projects={projects.filter((p) => p.status === "active")} today={today} />
       </div>
     </div>
+  );
+}
+
+function NextSteps({ projects, today }: { projects: Project[]; today: Day }) {
+  if (projects.length === 0) {
+    return (
+      <Quiet title="próximos passos">
+        Cada projeto ativo mostra aqui a próxima tarefa do plano. <InlineLink href="/projetos">Projetos</InlineLink>
+      </Quiet>
+    );
+  }
+  return (
+    <section>
+      <h2 className="text-[13px] text-faint">próximos passos</h2>
+      <ul className="mt-2 divide-y divide-seam/50">
+        {projects.map((p) => {
+          const next = nextTask(p.milestones, p.tasks);
+          const due = next ? dueLabel(next.dueDate, today, next.status) : null;
+          return (
+            <li key={p.id}>
+              <Link href={`/projetos/${p.id}`} className="group flex items-baseline gap-3 py-3">
+                <span aria-hidden className="block size-2 shrink-0 translate-y-[-1px] rounded-[2px]" style={{ background: p.color }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] text-faint">{p.name}</span>
+                  <span className="block truncate text-[15px] text-chalk group-hover:underline group-hover:decoration-seam group-hover:underline-offset-4">
+                    {next ? next.title : "Plano vazio ou concluído"}
+                  </span>
+                </span>
+                {next ? <span className="num shrink-0 text-[12px] text-faint">T{next.number}</span> : null}
+                {due ? <span className={`shrink-0 text-[12px] ${due.late ? "text-alert" : "text-faint"}`}>{due.text}</span> : null}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

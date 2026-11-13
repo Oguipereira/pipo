@@ -866,6 +866,21 @@ export type Database = {
           weight: number
         }[]
       }
+      project_activity: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          commits: number
+          last_commit_at: string
+          project_id: string
+        }[]
+      }
+      project_commit_counts: {
+        Args: { p_from: string; p_project: string; p_to: string }
+        Returns: {
+          commits: number
+          day: string
+        }[]
+      }
       repo_commit_counts: {
         Args: { p_from: string; p_to: string }
         Returns: {
