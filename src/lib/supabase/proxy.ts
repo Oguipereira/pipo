@@ -4,7 +4,8 @@ import type { Database } from "./database.types";
 import { supabasePublishableKey, supabaseUrl } from "./env";
 
 /** Rotas acessíveis sem sessão. */
-const PUBLIC_PATHS = ["/login", "/auth"];
+// /api/sync faz a própria autenticação (sessão ou CRON_SECRET).
+const PUBLIC_PATHS = ["/login", "/auth", "/api/sync"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

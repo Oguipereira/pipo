@@ -73,3 +73,163 @@ export function demoLogs(): HabitLog[] {
   }
   return logs;
 }
+
+// ---------------------------------------------------------------------------
+// GitHub (repositórios, commits, linguagens, bibliotecas)
+// ---------------------------------------------------------------------------
+
+const DEMO_REPOS = [
+  { id: "00000000-0000-4000-a000-000000000001", fullName: "demo/pipo", primaryLanguage: "TypeScript", weight: 5 },
+  { id: "00000000-0000-4000-a000-000000000002", fullName: "demo/financas-api", primaryLanguage: "Python", weight: 3 },
+  { id: "00000000-0000-4000-a000-000000000003", fullName: "demo/portfolio", primaryLanguage: "TypeScript", weight: 2 },
+  { id: "00000000-0000-4000-a000-000000000004", fullName: "demo/estudos-go", primaryLanguage: "Go", weight: 1 },
+  { id: "00000000-0000-4000-a000-000000000005", fullName: "demo/dotfiles", primaryLanguage: "Shell", weight: 0 },
+];
+
+export function demoRepos() {
+  return DEMO_REPOS.map((r, i) => ({
+    id: r.id,
+    fullName: r.fullName,
+    url: `https://github.com/${r.fullName}`,
+    isPrivate: i === 1,
+    isFork: false,
+    ignored: r.weight === 0,
+    primaryLanguage: r.primaryLanguage,
+    pushedAt: `${addDays(demoToday(), -i * 3)}T18:00:00Z`,
+  }));
+}
+
+const MESSAGES = [
+  "feat: check-in com um toque #T3",
+  "fix: dia local no fuso do usuário",
+  "refactor: extrai cálculo de streak",
+  "feat: heatmap por hábito",
+  "chore: atualiza dependências",
+  "test: casos de agenda seg–sex",
+  "feat: endpoint de transações",
+  "fix: paginação da lista de commits",
+  "docs: README com prints",
+  "feat: gráfico radial de linguagens #T7",
+  "style: espaçamentos no celular",
+  "feat: parser de pyproject.toml",
+];
+
+let demoCommitCache: { key: string; list: (import("./data/github").CommitItem & { repoId: string })[] } | null = null;
+
+function demoCommitList() {
+  const key = demoToday();
+  if (demoCommitCache?.key === key) return demoCommitCache.list;
+  const rand = rng(99);
+  const active = DEMO_REPOS.filter((r) => r.weight > 0);
+  const totalWeight = active.reduce((s, r) => s + r.weight, 0);
+  const list: (import("./data/github").CommitItem & { repoId: string })[] = [];
+  let n = 0;
+  for (const [day, count] of demoCommitCounts()) {
+    for (let i = 0; i < count; i++) {
+      let pick = rand() * totalWeight;
+      const repo = active.find((r) => (pick -= r.weight) < 0) ?? active[0];
+      // 9h–20h em São Paulo = 12h–23h UTC, sempre no mesmo dia.
+      const hour = 9 + Math.floor(rand() * 12);
+      const sha = (++n).toString(16).padStart(8, "0").repeat(5);
+      list.push({
+        id: `demo-${n}`,
+        sha,
+        message: MESSAGES[Math.floor(rand() * MESSAGES.length)],
+        committedAt: `${day}T${String(hour + 3).padStart(2, "0")}:${String(Math.floor(rand() * 60)).padStart(2, "0")}:00Z`,
+        localDate: day,
+        url: `https://github.com/${repo.fullName}/commit/${sha}`,
+        additions: Math.floor(rand() * 120),
+        deletions: Math.floor(rand() * 40),
+        repo: repo.fullName,
+        repoId: repo.id,
+      });
+    }
+  }
+  list.sort((a, b) => b.committedAt.localeCompare(a.committedAt));
+  demoCommitCache = { key, list };
+  return list;
+}
+
+export function demoCommitPage(opts: { from: Day; to: Day; repoIds?: string[]; page?: number; search?: string }) {
+  const page = opts.page ?? 0;
+  const filtered = demoCommitList().filter(
+    (c) =>
+      c.localDate >= opts.from &&
+      c.localDate <= opts.to &&
+      (!opts.repoIds?.length || opts.repoIds.includes(c.repoId)) &&
+      (!opts.search || c.message.toLowerCase().includes(opts.search.toLowerCase())),
+  );
+  return { total: filtered.length, items: filtered.slice(page * 40, page * 40 + 40) };
+}
+
+export function demoRepoActivity(from: Day, to: Day) {
+  const map = new Map<string, { repoId: string; fullName: string; commits: number; lastCommitAt: string | null }>();
+  for (const c of demoCommitList()) {
+    if (c.localDate < from || c.localDate > to) continue;
+    const r = map.get(c.repoId) ?? { repoId: c.repoId, fullName: c.repo, commits: 0, lastCommitAt: c.committedAt };
+    r.commits++;
+    map.set(c.repoId, r);
+  }
+  return [...map.values()].sort((a, b) => b.commits - a.commits);
+}
+
+export function demoLanguageShares() {
+  const shares = [
+    { language: "TypeScript", lines: 48210, commits: 640 },
+    { language: "Python", lines: 21330, commits: 310 },
+    { language: "SQL", lines: 6120, commits: 95 },
+    { language: "CSS", lines: 5400, commits: 180 },
+    { language: "Go", lines: 3900, commits: 60 },
+    { language: "Shell", lines: 1200, commits: 40 },
+    { language: "Dockerfile", lines: 420, commits: 18 },
+    { language: "Markdown", lines: 3100, commits: 120 },
+    { language: "JSON", lines: 2500, commits: 150 },
+  ];
+  return { source: "commits" as const, coverage: { detailed: 1180, total: 1296 }, shares };
+}
+
+export function demoLanguageMonthly() {
+  const rand = rng(5);
+  const out: { month: Day; language: string; lines: number }[] = [];
+  const end = demoToday();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(`${end.slice(0, 7)}-01T12:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() - i);
+    const month = d.toISOString().slice(0, 10);
+    out.push({ month, language: "TypeScript", lines: Math.round(2500 + rand() * 3000) });
+    out.push({ month, language: "Python", lines: Math.round((i < 6 ? 2600 : 700) * (0.6 + rand())) });
+    out.push({ month, language: "SQL", lines: Math.round(300 + rand() * 700) });
+    out.push({ month, language: "CSS", lines: Math.round(200 + rand() * 600) });
+    if (i < 4) out.push({ month, language: "Go", lines: Math.round(600 + rand() * 900) });
+  }
+  return out;
+}
+
+export function demoLibraries() {
+  const lib = (ecosystem: "npm" | "pypi", name: string, repos: number, weight: number, devOnly = false) => ({
+    ecosystem,
+    name,
+    repos,
+    activeRepos: repos,
+    weight,
+    devOnly,
+  });
+  return [
+    lib("npm", "react", 3, 1050),
+    lib("npm", "next", 2, 980),
+    lib("npm", "typescript", 3, 1050, true),
+    lib("npm", "tailwindcss", 2, 980),
+    lib("npm", "@supabase/supabase-js", 2, 880),
+    lib("npm", "zod", 2, 880),
+    lib("npm", "date-fns", 1, 640),
+    lib("npm", "vitest", 2, 880, true),
+    lib("npm", "eslint", 3, 1050, true),
+    lib("npm", "framer-motion", 1, 240),
+    lib("pypi", "fastapi", 1, 310),
+    lib("pypi", "sqlalchemy", 1, 310),
+    lib("pypi", "pydantic", 1, 310),
+    lib("pypi", "pandas", 1, 310),
+    lib("pypi", "pytest", 1, 310, true),
+    lib("pypi", "ruff", 1, 310, true),
+  ];
+}
